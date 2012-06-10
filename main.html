@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <script type="text/javascript">
+        var totalTime;
+        var lastTime;
+        var frames;
+        var SIZE_W = 32,
+            SIZE_H = 20,
+            canvas_width = 800,
+            canvas_height = 650;
+
+        var renderInterval = 33;
+
+        var mouseDown = false;
+        var translatePos = {
+            x: 0,
+            y: 0
+        };
+        var startDragOffset = {};
+        var offset = {
+            x: 0,
+            y: 0
+        };
+        var hex_r = 16; // сторона шестиугольника
+        var hex_side = 1.5*hex_r;
+        var hex_h = hex_r * 1.732050808; // высота шестиугольника, (корень из 3)
+
+        var showCoordinates = false;
+        var showGrid = true;
+
+        var grid = new Array();
+
+        function init() {
+            var canvas = document.getElementById('canvas');
+
+            canvas.width = canvas_width;
+            canvas.height = canvas_height;
+
+            frames = 0;
+            totalTime = 0;
+            lastTime = 0;
+
+
+            for(var i=0; i < SIZE_W; i++) {
+                grid[i] = new Array();
+                for(var k=0; k < SIZE_H; k++) {
+                    grid[i][k] = { hasFocus: false };
+                }
+            }
+//test
+            canvas.addEventListener('mousemove', function(evt){
+                var mousePos = getMousePos(canvas, evt);
+                var message = "Mouse position: " + mousePos.x + "," + mousePos.y +
+                        "; Translate position: " + translatePos.x + "," + translatePos.y;
+                //document.getElementById("message").innerHTML = message;
+                var pos_x, pos_y;
+
+                var w = SIZE_W * hex_r*2 + hex_r/2;
+                var h = SIZE_H * hex_h + hex_h/2;
+                if(mousePos.x > 0 && mousePos.y > 0 && mousePos.x < w && mousePos.y < h) {
+                    pos_x = Math.floor(mousePos.x/hex_side);
+                    if(pos_x == 0 || pos_x%2 == 0) {
+                        pos_y = Math.floor(mousePos.y/hex_h);
+                    } else {
+                        pos_y = Math.floor((mousePos.y-hex_h/2)/hex_h);
+                    }
+
+                    if(pos_x < SIZE_W && pos_y < SIZE_H) {
+                        for(var i=0; i < SIZE_W; i++) {
+                            for(var k=0; k < SIZE_H; k++) {
+                                if(grid[i][k].hasFocus && pos_x != i || pos_y != k) {
+                                    grid[i][k].hasFocus = false;
+                                }
+                            }
+                        }
+                        grid[pos_x][pos_y].hasFocus = true;
+                    }
+                }
+
+                if(mouseDown) {
+                    translatePos.x = evt.clientX - startDragOffset.x;
+                    translatePos.y = evt.clientY - startDragOffset.y;
+
+                }
+
+
+            }, false);
+
+            canvas.addEventListener("mousedown", function(evt){
+                mouseDown = true;
+                startDragOffset.x = evt.clientX - translatePos.x;
+                startDragOffset.y = evt.clientY - translatePos.y;
+            });
+
+            canvas.addEventListener("mouseup", function(evt){
+                mouseDown = false;
+            });
+
+            if (canvas.getContext) {
+                ctx = canvas.getContext('2d');
+                grid_canvas = getGridCanvas();
+                lastTime = (new Date()).getTime();
+                setInterval(update, renderInterval); // Интервал в 33мс даёт FPS равный ~30
+            }
+        }
+
+        function update()
+        /* Прорисовка кадра */
+        {
+            ctx.clearRect(0, 0, canvas_width, canvas_height);
+
+            ctx.save();
+
+            ctx.translate(translatePos.x, translatePos.y);
+
+            offset.x += translatePos.x;
+            offset.y += translatePos.y;
+
+            if(showGrid) {
+                ctx.drawImage(grid_canvas, 0, 0);
+            }
+
+            ctx.strokeStyle = "#ff8800";
+            for(var i=0; i < SIZE_W; i++) for(var k=0; k < SIZE_H; k++) {
+                if(grid[i][k].hasFocus) {
+                    drawHex(ctx, i, k);
+                }
+            }
+
+
+            ctx.restore();
+
+            var now = (new Date()).getTime();
+            totalTime += now - lastTime;
+            lastTime = now;
+            frames++;
+            if(totalTime > 1000) {
+                document.getElementById("fps").innerHTML = "FPS: " +
+                        frames.toString();
+                totalTime = 0;
+                frames = 0;
+            }
+        }
+
+        function drawHex(context, pos_x, pos_y, make_path)
+        {
+            make_path = typeof make_path !== 'undefined' ? make_path : false;
+            var x0, y0, offset_x, offset_y = 0;
+
+            x0 = pos_x * 1.5 * hex_r;
+
+            if (pos_x % 2 == 1 || pos_x == 1) {
+                offset_y = 0.5 * hex_h;
+            } else {
+                offset_y = 0;
+            }
+
+            y0 = pos_y * hex_h + offset_y;
+
+            if(make_path == false)
+                context.beginPath();
+
+            context.moveTo(x0, y0 + hex_h / 2);
+            context.lineTo(x0 + hex_r / 2, y0);
+            context.lineTo(x0 + hex_r * 1.5, y0);
+            context.lineTo(x0 + 2 * hex_r, y0 + hex_h / 2);
+            context.lineTo(x0 + hex_r * 1.5, y0 + hex_h);
+            context.lineTo(x0 + hex_r / 2, y0 + hex_h);
+            context.lineTo(x0, y0 + hex_h / 2);
+
+            if(make_path == false)
+                context.stroke();
+        }
+
+        function getGridCanvas()
+        {
+            var grid_canvas = document.createElement('canvas');
+            grid_canvas.width = SIZE_W * hex_r*2 + hex_r/2;
+            grid_canvas.height = SIZE_H * hex_h + hex_h/2;
+
+            var grid_context = grid_canvas.getContext('2d');
+
+            grid_context.strokeStyle = "#ddd";
+            grid_context.beginPath();
+            for(var i=0; i < SIZE_H; i++) {
+                for (var k = 0; k < SIZE_W; k++) {
+
+                    drawHex(grid_context, k, i, true);
+
+                    if(showCoordinates) {
+                        grid_context.fillStyle = "#000000";
+                        grid_context.fillText('(' + k + ';' + i + ')', x0 + hex_r / 2, y0 + hex_h / 2);
+                    }
+                }
+            }
+            grid_context.stroke();
+            return grid_canvas;
+        }
+        //console.log(frames);
+        function getMousePos(canvas, evt)
+        {
+            var obj = canvas;
+            var top = 0;
+            var left = 0;
+            while (obj && obj.tagName != 'BODY') {
+                top += obj.offsetTop;
+                left += obj.offsetLeft;
+                obj = obj.offsetParent;
+            }
+
+            var mouseX = evt.clientX - left + window.pageXOffset;
+            var mouseY = evt.clientY - top + window.pageYOffset;
+            return {
+                x: mouseX - translatePos.x,
+                y: mouseY - translatePos.y
+            };
+        }
+    </script>
+    <style type="text/css">
+        #canvas {
+            border: 1px solid #000000;
+            display: block;
+        }
+    </style>
+</head>
+<body onload="init()">
+    <span id="fps"></span> <span id="message"></span>
+    <canvas id="canvas"></canvas>
+</body>
+</html>
